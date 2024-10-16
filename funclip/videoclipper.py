@@ -39,7 +39,7 @@ class VideoClipper():
     # 识别后的文本、字幕文件路径
 
     #todo 音频识别
-    def video_recog(self, video_filename, sd_switch='no', hotwords="", output_dir=None):
+    def video_recog(self, video_filename, sd_switch='no', hotwords=""):
         logger.info("video_recog:提取视频音频进行下一步处理")
         # 读取视频文件
         video = mpy.VideoFileClip(video_filename)  #读取视频
@@ -47,20 +47,11 @@ class VideoClipper():
 
         # 处理文件路径,创建根据原视频文件创建切片文件名
         logger.warning("处理文件路径 根据原视频文件创建切片文件名")
-        if output_dir is not None:
-            os.makedirs(output_dir, exist_ok=True)
-            _, base_name = os.path.split(video_filename) # 分离掉临时文件的路径
-            base_name, _ = os.path.splitext(base_name)   # 分离掉扩展名
-            clip_video_file = base_name + '_clip.mp4'    # 加上新后缀名
 
-            audio_file = base_name + '.wav'
-            audio_file = os.path.join(output_dir, audio_file)
-
-        else:
-            # output_dir为空 保存到临时文件中 经过我的修改 output不可能为空
-            base_name, _ = os.path.splitext(video_filename) # 分离掉扩展名 #相当于保存在输入视频的路径 也就是临时文件路径
-            clip_video_file = base_name + '_clip.mp4'  # 加上新后缀
-            audio_file = base_name + '.wav'
+        # output_dir为空 保存到临时文件中 经过我的修改 output不可能为空
+        base_name, _ = os.path.splitext(video_filename) # 分离掉扩展名 #相当于保存在输入视频的路径 也就是临时文件路径
+        clip_video_file = base_name + '_clip.mp4'  # 加上新后缀
+        audio_file = base_name + '.wav'
 
         # 读取视频中的音频 临时保存到音频文件中
         video.audio.write_audiofile(audio_file)
@@ -80,7 +71,19 @@ class VideoClipper():
         logging.warning("开始识别音频,生成文字")
         print("videoclipper video_recog state:"+str(state))
         # res_text, res_srt = self.recog((16000, wav), state)
-        return self.recog((16000, wav), sd_switch, state, hotwords, output_dir)
+        return self.recog((16000, wav), sd_switch, state, hotwords)
+
+
+
+
+
+
+
+
+
+
+
+
 
     # 识别音频
     # 参数：
@@ -95,7 +98,7 @@ class VideoClipper():
     # output_dir: 输出目录，默认为None
     # 返回值：
     # 识别后的文本、字幕文件路径
-    def recog(self, audio_input, sd_switch='no', state=None, hotwords="", output_dir=None):
+    def recog(self, audio_input, sd_switch='no', state=None, hotwords=""):
         if state is None:
             state = {}
         sr, data = audio_input # 获取音频采样率和数据
@@ -118,7 +121,7 @@ class VideoClipper():
                                                     return_spk_res=True,
                                                     return_raw_text=True,
                                                     is_final=True,
-                                                    output_dir=output_dir,
+                                                    # output_dir=output_dir,
                                                     hotword=hotwords,
                                                     pred_timestamp=self.lang=='en',
                                                     en_post_proc=self.lang=='en',
@@ -134,7 +137,7 @@ class VideoClipper():
                                                     return_raw_text=True, # 是否返回原始文本
                                                     is_final=True, # 是否返回最终结果
                                                     hotword=hotwords, # 热词列表
-                                                    output_dir=output_dir, # 输出目录
+                                                    # output_dir=output_dir, # 输出目录
                                                     pred_timestamp=self.lang=='en', # 是否预测时间戳
                                                     en_post_proc=self.lang=='en', # 是否进行英文后处理
                                                     cache={}) # 缓存信息
@@ -157,24 +160,17 @@ class VideoClipper():
 
     # 根据时间戳列表剪辑视频
     def my_video_clip(self,
-                   dest_text,  # 原始文本
+                   video,#要切片的的视频对象
+                   video_name,  # 视频文件名
+                   sentences, # 包含句子和对应时间戳的列表，每个句子对应一个时间段 在llm剪辑中使用
                    start_ost,  # 视频开始偏移量（毫秒）
                    end_ost,  # 视频结束偏移量（毫秒）
-                   state,  # 存储识别结果的状态对象
-                   font_size=32,  # 字幕的字体大小
-                   font_color='white',  # 字幕的字体颜色
-                   add_sub=False,  # 是否添加字幕，默认不添加
-                   dest_spk=None,  # 目标说话人，用于匹配特定说话人的时间段
                    output_dir=None,  # 输出文件目录
                    timestamp_list=None):  # AI生成字幕的时间戳
 
         # 从 state 中提取识别的原始结果、时间戳、句子和视频信息
-        sentences = state['sentences'] # 包含句子和对应时间戳的列表，每个句子对应一个时间段 在llm剪辑中使用
-        video = state['video'] # 当前处理的视频对象，moviepy 的 VideoFileClip 对象，用于截取和操作视频片段
-        clip_video_file = state['clip_video_file'] # 原始文件名+_clip.mp4        剪辑后生成的视频文件名和路径，用于保存最终剪辑
-        video_filename = state['video_filename'] # 原始文件路径 输入视频文件的名称，代表正在处理的原始视频 video_filename = "input_video.mp4"
+        clip_video_file = video_name # 原始文件名+_clip.mp4        剪辑后生成的视频文件名和路径，用于保存最终剪辑
         logger.info("videoclipper:::my_video_clip::clip_video_file:" + clip_video_file)
-        logger.info("videoclipper:::my_video_clip::video_filename:" + video_filename)
 
 
         # 获取时间戳
@@ -239,13 +235,12 @@ class VideoClipper():
 
             # 如果指定了输出目录（output_dir 不为空）
             for single_clip in concate_clip:
-                logger.info(f"切片生成 output_dir={output_dir}")
                 os.makedirs(output_dir, exist_ok=True)
-                # 分离剪辑视频文件的路径和文件名（包括扩展名） 去除路径不要
-                _, file_with_extension = os.path.split(clip_video_file)
-                # 将文件名与扩展名分开，获取不含扩展名的文件名 去除后缀 如.mp4
-                clip_video_file_name, _ = os.path.splitext(file_with_extension)
-                logger.info(f'output_dir:{output_dir}\n clip_video_file:{clip_video_file}')
+                _, file_with_extension = os.path.split(clip_video_file) # 分离剪辑视频文件的路径和文件名（包括扩展名） 去除路径不要
+                clip_video_file_name, _ = os.path.splitext(file_with_extension)# 将文件名与扩展名分开，获取不含扩展名的文件名 去除后缀 如.mp4
+                logger.info(f'output_dir:{output_dir}\n clip_video_file_name:{clip_video_file_name}')
+
+
                 # 在输出目录中生成新的剪辑文件名，格式为 "原文件名_noX.mp4"，其中 X 是全局计数器 GLOBAL_COUNT
                 new_clip_video_file = os.path.join(output_dir,
                                                "{}_no{}.mp4".format(clip_video_file_name, self.GLOBAL_COUNT))
@@ -253,19 +248,14 @@ class VideoClipper():
                 temp_audio_file = os.path.join(output_dir,
                                                "{}_tempaudio_no{}.mp4".format(clip_video_file_name, self.GLOBAL_COUNT))
 
+                # 切片视频生成
                 single_clip.write_videofile(new_clip_video_file, audio_codec="aac", temp_audiofile=temp_audio_file)
                 logger.info("切片生成路径:"+new_clip_video_file)
                 self.GLOBAL_COUNT += 1  # 更新全局计数器，用于处理多个文件
 
 
-        else:
-            # 如果没有找到合适的片段，则返回原始视频文件
-            clip_video_file = video_filename
-            message = "No period found in the audio, return raw speech. You may check the recognition result and try other destination text."
-            srt_clip = ''
 
-        # 返回生成的视频文件、日志信息和 SRT 字幕内容
-        return clip_video_file, message, clip_srt
+
 
 
 
